@@ -4,8 +4,12 @@
 # ----
 
 # LIBRARIES ----
-
-
+import pandas as pd
+import numpy as np
+import janitor as jn
+import polars as pl
+import plotly.express as px
+import plotnine 
 
 # BUSINESS SCIENCE PROBLEM FRAMEWORK ----
 
@@ -43,17 +47,120 @@
 
 
 # COLLECT OUTCOMES ----
+email_list = 100_000
+unsub_count_per_sales_email_1 = 500
+unsub_rate_1 = unsub_count_per_sales_email_1 / email_list
 
+sales_emails_per_month_1 = 5
+conversion_rate_1 = 0.05
 
+lost_customers = email_list * \
+    unsub_rate_1 * \
+    sales_emails_per_month_1 * \
+    conversion_rate_1
+    
+average_customer_value_1 = 2000
+
+lost_revenue_per_month_1 = lost_customers * average_customer_value_1
 
 
 # No-growth scenario $3M cost
-
+cost_no_growth_1 = lost_revenue_per_month_1 * 12
+print(f"Cost of No Growth: ${cost_no_growth_1:,.0f}")
 
 # 2.5% growth scenario: 
 #   amount = principle * ((1+rate)**time)
+growth_rate = 3500 / 100_000
+
+100_000 * ((1 + growth_rate) ** 0)
+
+100_000 * ((1 + growth_rate) ** 1)
+
+## loop over 12 months
+for month in range(1, 13):
+    growth = 100_000 * ((1 + growth_rate) ** month)
+    print(f"Month {month}: ${growth:,.0f}")
 
 
+## cost table
+
+### period
+
+time = 12
+
+period_series = pl.Series("period", np.arange(0, 12))
+
+len(period_series)
+
+cost_table_df = period_series.to_frame()
+
+### email size - no growth
+
+cost_table_df = (
+    cost_table_df
+    .with_columns(
+        pl.lit(email_list).alias("email_list_size_no_growth")
+    )
+)
+
+### lost customers - no growth
+
+cost_table_df = (
+    cost_table_df
+    .with_columns(
+        (pl.col("email_list_size_no_growth") * 
+         unsub_rate_1 * 
+         sales_emails_per_month_1)
+        .alias("lost_customers_no_growth")
+    )
+    .with_columns(
+        (pl.col("lost_customers_no_growth") * 
+         conversion_rate_1 * 
+         average_customer_value_1)
+        .alias("lost_revenue_no_growth")
+    
+    )
+)
+
+print(cost_table_df)
+
+## email size with growth
+
+cost_table_df = (
+    cost_table_df
+    .with_columns(
+        (pl.col("email_list_size_no_growth") *
+        (1 + growth_rate) ** pl.col("period"))
+        .alias("email_list_size_with_growth")
+    )
+)
+
+px.line(
+    cost_table_df.to_pandas(),
+    x = "period",
+    y = ["email_list_size_no_growth", "email_list_size_with_growth"]
+) \
+    .add_hline(y = 0)
+    
+# lost customers with growth
+
+cost_table_df = (
+    cost_table_df
+    .with_columns(
+        (pl.col("email_list_size_with_growth") *
+         unsub_rate_1 * 
+         sales_emails_per_month_1)
+        .alias("lost_customers_with_growth")
+    )
+)
+
+cost_table_df
+
+# cost with growth
+
+(
+    
+)
 
 # If reduce unsubscribe rate by 30%
 
