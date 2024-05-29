@@ -110,7 +110,8 @@ cost_table_df = (
     .with_columns(
         (pl.col("email_list_size_no_growth") * 
          unsub_rate_1 * 
-         sales_emails_per_month_1)
+         sales_emails_per_month_1 * 
+         conversion_rate_1)
         .alias("lost_customers_no_growth")
     )
     .with_columns(
@@ -123,6 +124,18 @@ cost_table_df = (
 )
 
 print(cost_table_df)
+
+## cost no growth
+
+cost_table_df = (
+    cost_table_df
+    .with_columns(
+        (pl.col("lost_customers_no_growth") *
+        conversion_rate_1 * 
+        average_customer_value_1)
+        .alias("cost_no_growth")
+    )
+)
 
 ## email size with growth
 
@@ -149,7 +162,8 @@ cost_table_df = (
     .with_columns(
         (pl.col("email_list_size_with_growth") *
          unsub_rate_1 * 
-         sales_emails_per_month_1)
+         sales_emails_per_month_1 * 
+         conversion_rate_1)
         .alias("lost_customers_with_growth")
     )
 )
@@ -158,22 +172,146 @@ cost_table_df
 
 # cost with growth
 
-(
-    
+cost_table_df = (
+    cost_table_df
+    .with_columns(
+        (pl.col("lost_customers_with_growth") *
+        conversion_rate_1 * 
+        average_customer_value_1)
+        .alias("cost_with_growth")
+    )
 )
+
+### hvplot
+(
+    cost_table_df
+    .plot.line(
+        x = "period",
+        y = ["lost_revenue_no_growth", "cost_with_growth"],
+        title = "Cost Analysis"
+    )
+)
+
+### plotly express
+px.line(
+    cost_table_df.to_pandas(),
+    x = "period",
+    y = ["cost_no_growth", "cost_with_growth"]
+) \
+    .add_hline(y = 0)
+    
 
 # If reduce unsubscribe rate by 30%
 
-
+(
+    cost_table_df
+    .select(
+        pl.col("cost_no_growth").sum(),
+        pl.col("cost_with_growth").sum()
+    )
+    .with_columns(
+        ((pl.col("cost_with_growth") - pl.col("cost_no_growth")) / pl.col("cost_no_growth")).alias("cost_increase_percent")
+    )
+)
 
 # COST CALCULATION FUNCTIONS ----
 
 # Function: Calculate Monthly Unsubscriber Cost Table ----
 
+def cost_calc_monthly_cost_table(
+    email_list_size: int = 1e5,
+    email_list_growth_rate: float = 0.035,
+    sales_emails_per_month: int = 5,
+    unsub_rate_per_sales_email: float = 0.005,
+    customer_conversion_rate: float = 0.05,
+    average_customer_value: float = 2000,
+    n_periods: int = 12
+):
+    
+    period_series = pl.Series("period", np.arange(0, n_periods))
+    
+    cost_table_df = period_series.to_frame()
+    
+    cost_table_df = (
+        cost_table_df
+        # Email Size - No Growth
+        .with_columns(
+            pl.lit(email_list_size).alias("email_list_size_no_growth")
+         )
+        # Lost Customers - No Growth
+        .with_columns(
+            (pl.col("email_list_size_no_growth") * 
+                unsub_rate_per_sales_email * 
+                sales_emails_per_month * 
+                customer_conversion_rate)
+            .alias("lost_customers_no_growth")
+        )
+        # Cost - No Growth
+        .with_columns(
+            (pl.col("lost_customers_no_growth") *
+                customer_conversion_rate * 
+                average_customer_value)
+            .alias("cost_no_growth")
+        )
+        # Email Size - With Growth
+        .with_columns(
+            (pl.col("email_list_size_no_growth") *
+                (1 + email_list_growth_rate) ** pl.col("period"))
+            .alias("email_list_size_with_growth")
+        )
+        # Lost Customers - With Growth
+        .with_columns(
+            (pl.col("email_list_size_with_growth") *
+                unsub_rate_per_sales_email * 
+                sales_emails_per_month * 
+                customer_conversion_rate)
+            .alias("lost_customers_with_growth")
+        )
+        # Cost - With Growth
+        .with_columns(
+            (pl.col("lost_customers_with_growth") *
+                customer_conversion_rate * 
+                average_customer_value)
+            .alias("cost_with_growth")
+        )
+    )
+    
+    return cost_table_df
+
+cost_calc_monthly_cost_table(
+    email_list_size = 200_000,
+    email_list_growth_rate = 0.10,
+    sales_emails_per_month = 12,
+    unsub_rate_per_sales_email = 0.01,
+    customer_conversion_rate = 0.07,
+    average_customer_value = 4000,
+    n_periods = 12
+)
 
 # Function: Sumarize Cost ----
 
+(
+    cost_table_df
+    .select(
+        pl.col("cost_no_growth").sum(),
+        pl.col("cost_with_growth").sum()
+    )
+)
 
+def cost_total_unsub_cost(cost_table_df: pl.DataFrame):
+    summary_df = (
+     cost_table_df
+        .select(
+            pl.col("cost_no_growth").sum(),
+            pl.col("cost_with_growth").sum()
+        )
+    )
+
+    return summary_df 
+
+cost_total_unsub_cost(
+    cost_calc_monthly_cost_table()   
+)
 
 # ARE OBJECTIVES BEING MET?
 # - We can see a large cost due to unsubscription
