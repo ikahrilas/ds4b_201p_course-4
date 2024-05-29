@@ -325,19 +325,151 @@ cost_total_unsub_cost(
 
 # Cartesian Product (Expand Grid)
 
+data_dict = {
+    "email_list_monthly_growth_rate": np.linspace(0, 0.05, num = 10),
+    "customer_conversion_rate": np.linspace(0.04, 0.06, num = 3),
+}
+
+parameter_grid = (
+    pl.from_pandas(jn.expand_grid(others = data_dict))
+    .rename(
+        {
+            "('email_list_monthly_growth_rate', 0)": "email_list_monthly_growth_rate",
+            "('customer_conversion_rate', 0)": "customer_conversion_rate"
+        }
+    )
+)
+
+# list_comprehension
+
+def temporary_function(x, y):
+    
+    cost_table_df = cost_calc_monthly_cost_table(
+        email_list_growth_rate = x,
+        customer_conversion_rate = y
+    )
+    
+    summary_df = cost_total_unsub_cost(cost_table_df)
+    
+    return summary_df
+
+temporary_function(.10, .10)
+
+summary_list = [temporary_function(x, y) for x, y 
+                in zip(parameter_grid["email_list_monthly_growth_rate"], 
+                       parameter_grid["customer_conversion_rate"])]
+
+# concatenate summary list
+simulation_results_df = pl.concat(summary_list)
+
+print(simulation_results_df)
 
 # Function
 
+def cost_simulate_unsub_costs(
+    email_list_monthly_growth_rate : float = [0, 0.35],
+    customer_conversion_rate : float = [0.04, 0.05, 0.06],
+    **kwargs
+):
+    
+    data_dict = {
+        "email_list_monthly_growth_rate": email_list_monthly_growth_rate,
+        "customer_conversion_rate": customer_conversion_rate,
+    }
+
+    parameter_grid = (
+        pl.from_pandas(jn.expand_grid(others = data_dict))
+        .rename(
+            {
+                "('email_list_monthly_growth_rate', 0)": "email_list_monthly_growth_rate",
+                "('customer_conversion_rate', 0)": "customer_conversion_rate"
+            }
+        )
+    )
+    
+    # temporary function
+    def temporary_function(x, y):
+    
+        cost_table_df = cost_calc_monthly_cost_table(
+            email_list_growth_rate = x,
+            customer_conversion_rate = y,
+            **kwargs
+        )
+
+        summary_df = cost_total_unsub_cost(cost_table_df)
+
+        return summary_df
+    
+    # list comprehension
+    summary_list = [temporary_function(x, y) for x, y 
+                    in zip(parameter_grid["email_list_monthly_growth_rate"], 
+                           parameter_grid["customer_conversion_rate"])]
+    
+    # concatenate summary list
+    simulation_results_df = pl.concat(summary_list).hstack(parameter_grid)
+    
+    return simulation_results_df
+
+cost_simulate_unsub_costs(
+    email_list_monthly_growth_rate = [0.01, 0.02],
+    customer_conversion_rate = [0.04, 0.06],
+    email_list_size = 150_000
+)
 
 
 # VISUALIZE COSTS
 
-
+simulations_results_wide_df = cost_simulate_unsub_costs(
+    email_list_monthly_growth_rate = [0.01, 0.02],
+    customer_conversion_rate = [0.04, 0.06],
+    email_list_size = 100_000
+) \
+    .drop("cost_no_growth") \
+    .pivot(
+        index = "email_list_monthly_growth_rate",
+        columns = "customer_conversion_rate",
+        values = "cost_with_growth"
+    )
+    
+px.imshow(
+    simulations_results_wide_df.to_pandas().set_index("email_list_monthly_growth_rate"),
+    origin = "lower",
+    aspect = 'auto',
+    title = "Lead Cost Simulation",
+    labels = dict(x = "Customer Conversion Rate", 
+                  y = "Email List Monthly Growth Rate",
+                  color = "Cost of Unsubscription")
+)
 
 # Function: Plot Simulated Unsubscriber Costs
 
+def cost_plot_simulated_unsub_cost(simulation_results: pl.DataFrame):
+    
+    simulations_results_wide_df = simulation_results \
+    .drop("cost_no_growth") \
+    .pivot(
+        index = "email_list_monthly_growth_rate",
+        columns = "customer_conversion_rate",
+        values = "cost_with_growth"
+    )
+    
+    plot = px.imshow(
+        simulations_results_wide_df.to_pandas().set_index("email_list_monthly_growth_rate"),
+        origin = "lower",
+        aspect = 'auto',
+        title = "Lead Cost Simulation",
+        labels = dict(x = "Customer Conversion Rate", 
+                      y = "Email List Monthly Growth Rate",
+                      color = "Cost of Unsubscription")
+    )
+    
+    return plot
 
-
+cost_plot_simulated_unsub_cost(cost_simulate_unsub_costs(
+    email_list_monthly_growth_rate = np.linspace(0, 0.1, num = 10),
+    customer_conversion_rate = np.linspace(0.04, 0.1, num = 5),
+    email_list_size = 100_000
+))
 
 
 # ARE OBJECTIVES BEING MET?
