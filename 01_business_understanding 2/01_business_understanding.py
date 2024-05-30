@@ -9,7 +9,6 @@ import numpy as np
 import janitor as jn
 import polars as pl
 import plotly.express as px
-import plotnine 
 
 # BUSINESS SCIENCE PROBLEM FRAMEWORK ----
 
