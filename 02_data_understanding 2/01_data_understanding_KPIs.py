@@ -195,7 +195,7 @@ user_events_df = (
     )
 )
 
-(
+subscribers_joined_df = (
     subscribers_df
     .join(user_events_df, on = "mailchimp_id", how = "left")
     .with_columns(
@@ -203,12 +203,14 @@ user_events_df = (
     )
 )
 
-
-
 # 4.0 SWEETVIZ EDA REPORT
 
+report = sv.analyze(
+    subscribers_joined_df.to_pandas(),
+    target_feat = "made_purchase"
+)
 
-
+report.show_html("02_data_understanding 2/subscriber_eda_report.html")
 
 # 5.0 DEVELOP KPI'S ----
 # - Reduce unnecessary sales emails by 30% while maintaing 99% of sales
@@ -216,6 +218,18 @@ user_events_df = (
 
 # EVALUATE PERFORMANCE -----
 
+(
+    subscribers_joined_df
+    .select(
+        ["made_purchase", "tag_count"]
+    )
+    .group_by("made_purchase")
+    .agg(
+        pl.mean("tag_count").alias("mean_tag_count"),
+        pl.median("tag_count").alias("median_tag_count"),
+        pl.count("tag_count").alias("count")
+    )
+)
 
     
 
